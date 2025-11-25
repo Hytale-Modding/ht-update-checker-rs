@@ -91,7 +91,7 @@ async fn authenticate(client: &mut Client) -> anyhow::Result<AuthInfo> {
         let (mut stream, _addr) = listener
             .accept()
             .await
-            .context("Listner terminated without accepting a connection!")?;
+            .context("Listener terminated without accepting a connection!")?;
 
         let mut reader = BufReader::new(&mut stream);
 
