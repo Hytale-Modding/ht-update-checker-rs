@@ -1,0 +1,10 @@
+/target/
+
+# JetBrains IDEs
+/.idea/
+*.iml
+*.iws
+*.ipr
+
+*.env
+/data/
