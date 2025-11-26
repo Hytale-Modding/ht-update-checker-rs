@@ -1,6 +1,7 @@
 [package]
 name = "ht-update-checker"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.100"
@@ -24,3 +25,7 @@ uuid = { version = "1.18.1", features = ["serde", "v4"] }
 twilight-model = "0.17.0"
 twilight-util = { version = "0.17.0", features = ["builder", "link"] }
 twilight-http = { version = "0.17.0", default-features = false, features = ["rustls-webpki-roots", "decompression"] }
+diesel = { version = "2.3.3", features = ["sqlite", "chrono", "without-deprecated", "serde_json", "uuid", "r2d2", "returning_clauses_for_sqlite_3_35"] }
+diesel_migrations = { version = "2.3.0", features = ["sqlite"] }
+libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
+r2d2 = "0.8.10"

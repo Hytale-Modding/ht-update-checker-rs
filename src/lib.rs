@@ -1,13 +1,14 @@
 use crate::auth::AuthInfo;
 use anyhow::anyhow;
-use reqwest::Client;
-use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, USER_AGENT};
 use reqwest::redirect::Policy;
+use reqwest::Client;
 
 pub mod arcanite;
 pub mod auth;
 pub mod discord;
 pub mod util;
+pub mod db;
 
 pub const AUTH_FILE_PATH: &str = "data/accounts.json";
 

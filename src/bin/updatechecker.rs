@@ -1,8 +1,8 @@
-use anyhow::{Context, bail};
+use anyhow::{Context, bail, anyhow};
 use env_logger::Env;
 use ht_update_checker::arcanite::{TargetArchitecture, TargetOs, UpdateChannel};
 use ht_update_checker::auth::AuthInfo;
-use ht_update_checker::{AppState, arcanite, client, discord};
+use ht_update_checker::{AppState, arcanite, client, discord, db};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -10,6 +10,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::SqliteConnection;
 use tokio_cron_scheduler::job::JobId;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
@@ -28,6 +30,13 @@ pub async fn main() -> anyhow::Result<()> {
         );
         return Ok(());
     };
+
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::<SqliteConnection>::new(database_url.clone());
+    let pool: Pool<ConnectionManager<SqliteConnection>> = Pool::builder()
+        .build(manager)
+        .with_context(|| format!("Failed to connect to database at {database_url}"))?;
+    db::apply_migrations(&pool).map_err(|e| anyhow!(e))?;
 
     let reader = BufReader::new(stream);
     let account: AuthInfo =
