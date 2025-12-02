@@ -38,7 +38,7 @@ CREATE TABLE update_channels (
         REFERENCES java_versions (version) ON DELETE RESTRICT ON UPDATE CASCADE,
 
     FOREIGN KEY (game_version_id)
-        REFERENCES game_versions (version) ON DELETE RESTRICT ON UPDATE CASCADE
+        REFERENCES game_versions (build_number) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 CREATE TABLE credentials (
