@@ -1,5 +1,5 @@
 use anyhow::{Context, anyhow, bail};
-use diesel::{SqliteConnection};
+use diesel::SqliteConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use env_logger::Env;
 use ht_update_checker::arcanite::{TargetArchitecture, TargetOs, UpdateChannel};
@@ -119,11 +119,20 @@ async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
     let Some(patch_info) = account_meta.patchlines.get(&channel) else {
         bail!("Unable to find patchline {channel}");
     };
-    let game_version = db::upsert_game_version(&mut db, patch_info.current_build, &patch_info.build_version)?;
+    let game_version =
+        db::upsert_game_version(&mut db, patch_info.current_build, &patch_info.build_version)?;
 
-    let Some(update_info) = db::update_channel(&mut db, &channel, &launcher_version, &java_version, &game_version)? else {
+    let Some(update_info) = db::update_channel(
+        &mut db,
+        &channel,
+        &launcher_version,
+        &java_version,
+        &game_version,
+    )?
+    else {
         log::debug!("Already up to date!");
-        return Ok(()) };
+        return Ok(());
+    };
 
     log::info!(
         "Launcher version: {launcher_version}; Java version: {java_version}, game version: {game_version} build: {build_number}",
@@ -134,7 +143,16 @@ async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
     );
 
     if state.discord_webhook_url.is_some() {
-        discord::send_webhook(state, &channel, &launcher_version.version, &java_version.version, &game_version.version, game_version.build_number as u64, update_info.updated_at).await?;
+        discord::send_webhook(
+            state,
+            &channel,
+            &launcher_version.version,
+            &java_version.version,
+            &game_version.version,
+            game_version.build_number as u64,
+            update_info.updated_at,
+        )
+        .await?;
     }
 
     Ok(())

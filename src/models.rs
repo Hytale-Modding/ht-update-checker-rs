@@ -11,7 +11,7 @@ type DB = diesel::sqlite::Sqlite;
 pub struct LauncherVersion {
     pub version: String,
 
-    pub created_at: DateTime<Utc>
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Identifiable)]
@@ -30,7 +30,7 @@ pub struct JavaVersion {
     pub version: String,
 
     #[diesel(serialize_as = diesel::sql_types::Timestamp)]
-    pub created_at: DateTime<Utc>
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Identifiable)]
@@ -48,7 +48,7 @@ pub struct GameVersion {
     pub build_number: i32,
     pub version: String,
 
-    pub created_at: DateTime<Utc>
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Identifiable)]
@@ -57,7 +57,7 @@ pub struct GameVersion {
 #[diesel(table_name = crate::schema::game_versions)]
 pub struct NewGameVersion<'a> {
     pub build_number: i32,
-    pub version: &'a str
+    pub version: &'a str,
 }
 
 #[derive(Queryable, Selectable, Identifiable, Debug, PartialEq)]
@@ -75,7 +75,7 @@ pub struct UpdateChannel {
     pub game_version_id: i32,
 
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Identifiable, Default)]
@@ -89,7 +89,7 @@ pub struct NewUpdateChannel<'a> {
     pub java_version_id: &'a str,
     pub game_version_id: i32,
 
-    pub updated_at: Option<DateTime<Utc>>
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl NewUpdateChannel<'_> {
@@ -117,7 +117,7 @@ pub struct SetUpdateChannel {
     pub java_version_id: String,
     pub game_version_id: i32,
 
-    pub updated_at: DateTime<Utc>
+    pub updated_at: DateTime<Utc>,
 }
 
 impl SetUpdateChannel {
@@ -127,7 +127,7 @@ impl SetUpdateChannel {
             launcher_version_id: value.launcher_version_id.to_string(),
             java_version_id: value.java_version_id.to_string(),
             game_version_id: value.game_version_id,
-            updated_at: updated_at.clone(),
+            updated_at: *updated_at,
         }
     }
 }

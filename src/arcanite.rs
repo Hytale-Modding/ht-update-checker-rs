@@ -27,7 +27,7 @@ impl UpdateChannel {
     pub fn color(&self) -> u32 {
         match self {
             UpdateChannel::Release => 0x476ed1,
-            UpdateChannel::Unknown(_) => 0xb22828
+            UpdateChannel::Unknown(_) => 0xb22828,
         }
     }
 }

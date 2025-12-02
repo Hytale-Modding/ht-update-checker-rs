@@ -1,5 +1,5 @@
 use crate::AppState;
-use crate::arcanite::{UpdateChannel};
+use crate::arcanite::UpdateChannel;
 use anyhow::{Context, bail};
 use chrono::{DateTime, Utc};
 use twilight_http::client::ClientBuilder;
@@ -14,7 +14,7 @@ pub async fn send_webhook(
     java_version: &str,
     game_version: &str,
     game_build_number: u64,
-    timestamp: DateTime<Utc>
+    timestamp: DateTime<Utc>,
 ) -> anyhow::Result<()> {
     let Some(webhook_url) = state.discord_webhook_url.clone() else {
         bail!("No webhook url provided!");
@@ -32,19 +32,10 @@ pub async fn send_webhook(
             Timestamp::from_secs(timestamp.timestamp())
                 .expect("Tried to construct invalid timestamp!"),
         )
-        .field(EmbedFieldBuilder::new(
-            "Launcher Version",
-            launcher_version,
-        ))
-        .field(EmbedFieldBuilder::new(
-            "Java Version",
-            java_version,
-        ))
+        .field(EmbedFieldBuilder::new("Launcher Version", launcher_version))
+        .field(EmbedFieldBuilder::new("Java Version", java_version))
         .field(EmbedFieldBuilder::new("Game Version", game_version).inline())
-        .field(
-            EmbedFieldBuilder::new("Build Number", format!("{game_build_number}"))
-                .inline(),
-        );
+        .field(EmbedFieldBuilder::new("Build Number", format!("{game_build_number}")).inline());
 
     let embeds = vec![embed.build()];
     let response = client

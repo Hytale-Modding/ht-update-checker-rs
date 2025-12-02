@@ -1,7 +1,7 @@
 use crate::auth::AuthInfo;
 use anyhow::anyhow;
-use diesel::r2d2::ConnectionManager;
 use diesel::SqliteConnection;
+use diesel::r2d2::ConnectionManager;
 use r2d2::Pool;
 use reqwest::Client;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};

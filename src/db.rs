@@ -1,11 +1,14 @@
-use crate::models::{GameVersion, JavaVersion, LauncherVersion, NewGameVersion, NewJavaVersion, NewLauncherVersion, UpdateChannel, NewUpdateChannel, SetUpdateChannel};
 use crate::arcanite;
+use crate::models::{
+    GameVersion, JavaVersion, LauncherVersion, NewGameVersion, NewJavaVersion, NewLauncherVersion,
+    NewUpdateChannel, SetUpdateChannel, UpdateChannel,
+};
 use anyhow::Context;
+use chrono::Utc;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{Insertable, OptionalExtension, RunQueryDsl, SelectableHelper, SqliteConnection};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::error::Error;
-use chrono::Utc;
 
 pub fn apply_migrations(
     pool: &Pool<ConnectionManager<SqliteConnection>>,
