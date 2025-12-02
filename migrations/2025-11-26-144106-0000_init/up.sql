@@ -41,17 +41,4 @@ CREATE TABLE update_channels (
         REFERENCES game_versions (build_number) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
-CREATE TABLE credentials (
-    id TEXT NOT NULL PRIMARY KEY,
-    token TEXT NOT NULL,
-    token_type TEXT NOT NULL,
-    scopes TEXT NOT NULL DEFAULT 'openid',
-
-    expires_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    refresh_token TEXT,
-
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 pragma optimize;
