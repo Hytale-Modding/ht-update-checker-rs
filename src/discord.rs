@@ -1,7 +1,7 @@
 use crate::AppState;
-use crate::arcanite::{JavaVersionMeta, LauncherMeta, Patchline};
+use crate::arcanite::{UpdateChannel};
 use anyhow::{Context, bail};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use twilight_http::client::ClientBuilder;
 use twilight_model::util::Timestamp;
 use twilight_util::builder::embed::{EmbedBuilder, EmbedFieldBuilder};
@@ -9,9 +9,12 @@ use twilight_util::link::webhook;
 
 pub async fn send_webhook(
     state: &AppState,
-    launcher_meta: &LauncherMeta,
-    java_version_meta: &JavaVersionMeta,
-    patch_info: &Patchline,
+    channel: &UpdateChannel,
+    launcher_version: &str,
+    java_version: &str,
+    game_version: &str,
+    game_build_number: u64,
+    timestamp: DateTime<Utc>
 ) -> anyhow::Result<()> {
     let Some(webhook_url) = state.discord_webhook_url.clone() else {
         bail!("No webhook url provided!");
@@ -23,23 +26,23 @@ pub async fn send_webhook(
     let client = ClientBuilder::new().build();
 
     let embed = EmbedBuilder::new()
-        .color(0x476ed1)
+        .color(channel.color())
         .title("New Game Build")
         .timestamp(
-            Timestamp::from_secs(Utc::now().timestamp())
+            Timestamp::from_secs(timestamp.timestamp())
                 .expect("Tried to construct invalid timestamp!"),
         )
         .field(EmbedFieldBuilder::new(
             "Launcher Version",
-            &launcher_meta.version,
+            launcher_version,
         ))
         .field(EmbedFieldBuilder::new(
             "Java Version",
-            &java_version_meta.version,
+            java_version,
         ))
-        .field(EmbedFieldBuilder::new("Game Version", &patch_info.build_version).inline())
+        .field(EmbedFieldBuilder::new("Game Version", game_version).inline())
         .field(
-            EmbedFieldBuilder::new("Build Number", format!("{}", &patch_info.current_build))
+            EmbedFieldBuilder::new("Build Number", format!("{game_build_number}"))
                 .inline(),
         );
 

@@ -20,8 +20,15 @@ pub enum UpdateChannel {
 }
 
 impl UpdateChannel {
-    fn values() -> [Self; 1] {
+    pub fn values() -> [Self; 1] {
         [UpdateChannel::Release]
+    }
+
+    pub fn color(&self) -> u32 {
+        match self {
+            UpdateChannel::Release => 0x476ed1,
+            UpdateChannel::Unknown(_) => 0xb22828
+        }
     }
 }
 

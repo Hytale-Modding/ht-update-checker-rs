@@ -102,10 +102,10 @@ async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
     let channel = UpdateChannel::default();
 
     let launcher_meta = arcanite::get_launcher_meta(&state.client, &channel).await?;
-    db::upsert_launcher_version(&mut db, &launcher_meta.version)?;
+    let launcher_version = db::upsert_launcher_version(&mut db, &launcher_meta.version)?;
 
     let java_meta = arcanite::get_java_version_meta(&state.client, &launcher_meta).await?;
-    db::upsert_java_version(&mut db, &java_meta.version)?;
+    let java_version = db::upsert_java_version(&mut db, &java_meta.version)?;
 
     let account_meta = arcanite::get_account_meta(
         &state.client,
@@ -119,20 +119,22 @@ async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
     let Some(patch_info) = account_meta.patchlines.get(&channel) else {
         bail!("Unable to find patchline {channel}");
     };
-    db::upsert_game_version(&mut db, patch_info.current_build, &patch_info.build_version)?;
+    let game_version = db::upsert_game_version(&mut db, patch_info.current_build, &patch_info.build_version)?;
 
-    // db::update_channel(&mut db, &channel);
+    let Some(update_info) = db::update_channel(&mut db, &channel, &launcher_version, &java_version, &game_version)? else {
+        log::debug!("Already up to date!");
+        return Ok(()) };
 
     log::info!(
         "Launcher version: {launcher_version}; Java version: {java_version}, game version: {game_version} build: {build_number}",
-        launcher_version = launcher_meta.version,
-        java_version = java_meta.version,
-        game_version = patch_info.build_version,
-        build_number = patch_info.current_build
+        launcher_version = launcher_version.version,
+        java_version = java_version.version,
+        game_version = game_version.version,
+        build_number = game_version.build_number
     );
 
     if state.discord_webhook_url.is_some() {
-        discord::send_webhook(state, &launcher_meta, &java_meta, patch_info).await?;
+        discord::send_webhook(state, &channel, &launcher_version.version, &java_version.version, &game_version.version, game_version.build_number as u64, update_info.updated_at).await?;
     }
 
     Ok(())

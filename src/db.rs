@@ -1,18 +1,11 @@
-use crate::models::{
-    GameVersion, JavaVersion, LauncherVersion, NewGameVersion, NewJavaVersion, NewLauncherVersion,
-    UpdateChannel,
-};
-use crate::schema::java_versions::dsl::java_versions;
-use crate::{arcanite, schema};
+use crate::models::{GameVersion, JavaVersion, LauncherVersion, NewGameVersion, NewJavaVersion, NewLauncherVersion, UpdateChannel, NewUpdateChannel, SetUpdateChannel};
+use crate::arcanite;
 use anyhow::Context;
-use diesel::associations::HasTable;
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::{
-    Connection, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-    SqliteConnection,
-};
+use diesel::{Insertable, OptionalExtension, RunQueryDsl, SelectableHelper, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::error::Error;
+use chrono::Utc;
 
 pub fn apply_migrations(
     pool: &Pool<ConnectionManager<SqliteConnection>>,
@@ -89,11 +82,31 @@ pub fn upsert_game_version(
 pub fn update_channel(
     connection: &mut SqliteConnection,
     ch: &arcanite::UpdateChannel,
-    launcher_version_id: &str,
-    java_version_id: &str,
-    game_version_id: u64,
-) -> anyhow::Result<()> {
-    // let prev = update_channels.find(ch.to_string());
+    current_launcher_version: &LauncherVersion,
+    current_java_version: &JavaVersion,
+    current_game_version: &GameVersion,
+) -> anyhow::Result<Option<UpdateChannel>> {
+    use crate::schema::update_channels::dsl::*;
 
-    Ok(())
+    let data = NewUpdateChannel {
+        channel: &ch.to_string(),
+
+        launcher_version_id: &current_launcher_version.version,
+        java_version_id: &current_java_version.version,
+        game_version_id: current_game_version.build_number,
+
+        ..Default::default()
+    };
+
+    let result = diesel::insert_into(update_channels)
+        .values(&data)
+        .on_conflict(channel)
+        .do_update()
+        .set(SetUpdateChannel::convert(&data, &Utc::now()))
+        .returning(UpdateChannel::as_returning())
+        .get_result(connection)
+        .optional()
+        .context("update_channel")?;
+
+    Ok(result)
 }
