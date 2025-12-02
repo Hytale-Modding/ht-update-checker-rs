@@ -1,12 +1,15 @@
 use crate::arcanite;
 use crate::models::{
     GameVersion, JavaVersion, LauncherVersion, NewGameVersion, NewJavaVersion, NewLauncherVersion,
-    NewUpdateChannel, SetUpdateChannel, UpdateChannel,
+    NewUpdateChannel, UpdateChannel,
 };
-use anyhow::Context;
-use chrono::Utc;
+use anyhow::{Context, bail};
+use diesel::dsl::now;
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::{Insertable, OptionalExtension, RunQueryDsl, SelectableHelper, SqliteConnection};
+use diesel::{
+    ExpressionMethods, Insertable, OptionalEmptyChangesetExtension, OptionalExtension, QueryDsl,
+    RunQueryDsl, SelectableHelper, SqliteConnection,
+};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::error::Error;
 
@@ -28,38 +31,64 @@ pub fn apply_migrations(
 
 pub fn upsert_launcher_version(
     connection: &mut SqliteConnection,
-    launcher_version: &str,
+    new_launcher_version: &str,
 ) -> anyhow::Result<LauncherVersion> {
     use crate::schema::launcher_versions::dsl::*;
 
     let result = NewLauncherVersion {
-        version: launcher_version,
+        version: new_launcher_version,
     }
     .insert_into(launcher_versions)
     .on_conflict_do_nothing()
     .returning(LauncherVersion::as_returning())
     .get_result(connection)
-    .with_context(|| format!("upsert_launcher_version @ {launcher_version}"))?;
+    .optional()
+    .with_context(|| format!("upsert_launcher_version @ {new_launcher_version}"))?;
 
-    Ok(result)
+    match result {
+        Some(result) => Ok(result),
+        None => {
+            let v = launcher_versions
+                .find(new_launcher_version)
+                .select(LauncherVersion::as_select())
+                .first(connection)
+                .with_context(|| {
+                    format!("upsert_launcher_version::find @ {new_launcher_version}")
+                })?;
+
+            Ok(v)
+        }
+    }
 }
 
 pub fn upsert_java_version(
     connection: &mut SqliteConnection,
-    java_version: &str,
+    new_java_version: &str,
 ) -> anyhow::Result<JavaVersion> {
     use crate::schema::java_versions::dsl::*;
 
     let result = NewJavaVersion {
-        version: java_version,
+        version: new_java_version,
     }
     .insert_into(java_versions)
     .on_conflict_do_nothing()
     .returning(JavaVersion::as_returning())
     .get_result(connection)
-    .with_context(|| format!("upsert_java_version @ {java_version}"))?;
+    .optional()
+    .with_context(|| format!("upsert_java_version @ {new_java_version}"))?;
 
-    Ok(result)
+    match result {
+        Some(result) => Ok(result),
+        None => {
+            let v = java_versions
+                .find(new_java_version)
+                .select(JavaVersion::as_select())
+                .first(connection)
+                .with_context(|| format!("upsert_java_version::find @ {new_java_version}"))?;
+
+            Ok(v)
+        }
+    }
 }
 
 pub fn upsert_game_version(
@@ -77,9 +106,21 @@ pub fn upsert_game_version(
     .on_conflict_do_nothing()
     .returning(GameVersion::as_returning())
     .get_result(connection)
+    .optional()
     .with_context(|| format!("upsert_game_version @ {build}"))?;
 
-    Ok(result)
+    match result {
+        Some(result) => Ok(result),
+        None => {
+            let v = game_versions
+                .find(build as i32)
+                .select(GameVersion::as_select())
+                .first(connection)
+                .with_context(|| format!("upsert_game_version::find @ {build}"))?;
+
+            Ok(v)
+        }
+    }
 }
 
 pub fn update_channel(
@@ -91,25 +132,55 @@ pub fn update_channel(
 ) -> anyhow::Result<Option<UpdateChannel>> {
     use crate::schema::update_channels::dsl::*;
 
+    let channel_name = ch.to_string();
+    let prev = update_channels
+        .find(&channel_name)
+        .select(UpdateChannel::as_select())
+        .first(connection)
+        .optional()
+        .context("update_channel::find")?;
+
+    if prev.is_some_and(|prev| {
+        prev.launcher_version_id == current_launcher_version.version
+            && prev.java_version_id == current_java_version.version
+            && prev.game_version_id == current_game_version.build_number
+    }) {
+        return Ok(None);
+    }
+
     let data = NewUpdateChannel {
         channel: &ch.to_string(),
 
         launcher_version_id: &current_launcher_version.version,
         java_version_id: &current_java_version.version,
         game_version_id: current_game_version.build_number,
-
-        ..Default::default()
     };
 
-    let result = diesel::insert_into(update_channels)
+    let affected = diesel::insert_into(update_channels)
         .values(&data)
         .on_conflict(channel)
         .do_update()
-        .set(SetUpdateChannel::convert(&data, &Utc::now()))
-        .returning(UpdateChannel::as_returning())
-        .get_result(connection)
-        .optional()
-        .context("update_channel")?;
+        .set(&data)
+        .execute(connection)
+        .optional_empty_changeset()
+        .context("update_channel::upsert")?
+        .unwrap_or(0);
 
-    Ok(result)
+    if affected > 1 {
+        log::error!(
+            "update_channel::upsert DATABASE ERROR: got {affected} affected rows, expected at most 1"
+        );
+        bail!("")
+    } else if affected > 0 {
+        let result = diesel::update(update_channels)
+            .filter(channel.eq(data.channel))
+            .set(updated_at.eq(now))
+            .returning(UpdateChannel::as_returning())
+            .get_result(connection)
+            .context("update_channel::update_timestamp")?;
+
+        return Ok(Some(result));
+    }
+
+    Ok(None)
 }

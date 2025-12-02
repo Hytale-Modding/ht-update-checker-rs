@@ -78,7 +78,7 @@ pub struct UpdateChannel {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Insertable, Identifiable, Default)]
+#[derive(Insertable, Identifiable, AsChangeset)]
 #[diesel(check_for_backend(DB))]
 #[diesel(primary_key(channel))]
 #[diesel(table_name = crate::schema::update_channels)]
@@ -88,46 +88,4 @@ pub struct NewUpdateChannel<'a> {
     pub launcher_version_id: &'a str,
     pub java_version_id: &'a str,
     pub game_version_id: i32,
-
-    pub updated_at: Option<DateTime<Utc>>,
-}
-
-impl NewUpdateChannel<'_> {
-    pub fn get_as_changeset(value: &Self, updated_at: Option<DateTime<Utc>>) -> SetUpdateChannel {
-        SetUpdateChannel {
-            channel: value.channel.to_string(),
-
-            launcher_version_id: value.launcher_version_id.to_string(),
-            java_version_id: value.java_version_id.to_string(),
-            game_version_id: value.game_version_id,
-
-            updated_at: updated_at.unwrap_or_else(Utc::now),
-        }
-    }
-}
-
-#[derive(AsChangeset)]
-#[diesel(check_for_backend(DB))]
-#[diesel(primary_key(channel))]
-#[diesel(table_name = crate::schema::update_channels)]
-pub struct SetUpdateChannel {
-    pub channel: String,
-
-    pub launcher_version_id: String,
-    pub java_version_id: String,
-    pub game_version_id: i32,
-
-    pub updated_at: DateTime<Utc>,
-}
-
-impl SetUpdateChannel {
-    pub fn convert(value: &NewUpdateChannel, updated_at: &DateTime<Utc>) -> Self {
-        Self {
-            channel: value.channel.to_string(),
-            launcher_version_id: value.launcher_version_id.to_string(),
-            java_version_id: value.java_version_id.to_string(),
-            game_version_id: value.game_version_id,
-            updated_at: *updated_at,
-        }
-    }
 }
