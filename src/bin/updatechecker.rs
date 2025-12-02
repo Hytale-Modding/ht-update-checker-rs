@@ -1,8 +1,10 @@
-use anyhow::{Context, bail, anyhow};
+use anyhow::{Context, anyhow, bail};
+use diesel::{SqliteConnection};
+use diesel::r2d2::{ConnectionManager, Pool};
 use env_logger::Env;
 use ht_update_checker::arcanite::{TargetArchitecture, TargetOs, UpdateChannel};
 use ht_update_checker::auth::AuthInfo;
-use ht_update_checker::{AppState, arcanite, client, discord, db};
+use ht_update_checker::{AppState, arcanite, client, db, discord};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -10,8 +12,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::SqliteConnection;
 use tokio_cron_scheduler::job::JobId;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
@@ -49,6 +49,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(AppState {
         auth: account,
+        db: pool,
         client: client()?,
         discord_webhook_url,
     });
@@ -97,9 +98,14 @@ async fn try_update(job_id: JobId, state: &AppState) {
 }
 
 async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
+    let mut db = state.db.get()?;
     let channel = UpdateChannel::default();
+
     let launcher_meta = arcanite::get_launcher_meta(&state.client, &channel).await?;
+    db::upsert_launcher_version(&mut db, &launcher_meta.version)?;
+
     let java_meta = arcanite::get_java_version_meta(&state.client, &launcher_meta).await?;
+    db::upsert_java_version(&mut db, &java_meta.version)?;
 
     let account_meta = arcanite::get_account_meta(
         &state.client,
@@ -113,6 +119,9 @@ async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
     let Some(patch_info) = account_meta.patchlines.get(&channel) else {
         bail!("Unable to find patchline {channel}");
     };
+    db::upsert_game_version(&mut db, patch_info.current_build, &patch_info.build_version)?;
+
+    // db::update_channel(&mut db, &channel);
 
     log::info!(
         "Launcher version: {launcher_version}; Java version: {java_version}, game version: {game_version} build: {build_number}",

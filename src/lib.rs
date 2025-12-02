@@ -1,14 +1,20 @@
 use crate::auth::AuthInfo;
 use anyhow::anyhow;
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, USER_AGENT};
-use reqwest::redirect::Policy;
+use diesel::r2d2::ConnectionManager;
+use diesel::SqliteConnection;
+use r2d2::Pool;
 use reqwest::Client;
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::redirect::Policy;
 
 pub mod arcanite;
 pub mod auth;
-pub mod discord;
-pub mod util;
 pub mod db;
+pub mod discord;
+pub mod models;
+pub mod util;
+#[rustfmt::skip]
+#[allow(clippy::all, warnings)]
 pub mod schema;
 
 pub const AUTH_FILE_PATH: &str = "data/accounts.json";
@@ -42,6 +48,7 @@ pub fn auth_client() -> anyhow::Result<Client> {
 
 pub struct AppState {
     pub auth: AuthInfo,
+    pub db: Pool<ConnectionManager<SqliteConnection>>,
     pub client: Client,
     pub discord_webhook_url: Option<String>,
 }
