@@ -1,0 +1,3 @@
+# https://github.com/bmwill/diffy/issues/20
+src/schema.rs text eol=lf
+src/schema.patch text eol=lf
