@@ -9,6 +9,7 @@ pub mod auth;
 pub mod discord;
 pub mod util;
 pub mod db;
+pub mod schema;
 
 pub const AUTH_FILE_PATH: &str = "data/accounts.json";
 
