@@ -1,20 +1,9 @@
 diff --git a/src/schema.rs b/src/schema.rs
-index 427fc2f..15e4352 100644
+index a82bf05..d789759 100644
 --- a/src/schema.rs
 +++ b/src/schema.rs
-@@ -5,47 +5,47 @@ diesel::table! {
-         id -> Text,
-         token -> Text,
-         token_type -> Text,
-         scopes -> Text,
-         expires_at -> Text,
-         refresh_token -> Nullable<Text>,
--        created_at -> Text,
--        updated_at -> Text,
-+        created_at -> TimestamptzSqlite,
-+        updated_at -> TimestamptzSqlite,
-     }
- }
+@@ -1,38 +1,38 @@
+ // @generated automatically by Diesel CLI.
  
  diesel::table! {
      game_versions (build_number) {
@@ -54,6 +43,6 @@ index 427fc2f..15e4352 100644
      }
  }
  
+ diesel::joinable!(update_channels -> game_versions (game_version_id));
  diesel::joinable!(update_channels -> java_versions (java_version_id));
  diesel::joinable!(update_channels -> launcher_versions (launcher_version_id));
- 
