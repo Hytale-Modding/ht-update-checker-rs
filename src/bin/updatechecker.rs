@@ -2,7 +2,7 @@ use anyhow::{Context, anyhow, bail};
 use diesel::SqliteConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use env_logger::Env;
-use ht_update_checker::arcanite::{TargetArchitecture, TargetOs, UpdateChannel};
+use ht_update_checker::arcanite::{ArcaniteClient, TargetArchitecture, TargetOs, UpdateChannel};
 use ht_update_checker::auth::AuthInfo;
 use ht_update_checker::{AppState, arcanite, client, db, discord};
 use std::env;
@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio_cron_scheduler::job::JobId;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
@@ -47,12 +48,14 @@ pub async fn main() -> anyhow::Result<()> {
         log::warn!("DISCORD_WEBHOOK_URL is not set!");
     }
 
-    let state = Arc::new(AppState {
-        auth: account,
+    let client = client()?;
+
+    let state = Arc::new(Mutex::new(AppState {
         db: pool,
-        client: client()?,
+        client: client.clone(),
+        arcanite: ArcaniteClient::new(client, account),
         discord_webhook_url,
-    });
+    }));
 
     let scheduler = JobScheduler::new().await?;
     scheduler.shutdown_on_ctrl_c();
@@ -68,7 +71,7 @@ pub async fn main() -> anyhow::Result<()> {
             let state = Arc::clone(&state);
             move |job_id, _scheduler| {
                 let state = Arc::clone(&state);
-                Box::pin(async move { try_update(job_id, &state).await })
+                Box::pin(async move { try_update(job_id, state).await })
             }
         })?)
         .await?;
@@ -78,7 +81,7 @@ pub async fn main() -> anyhow::Result<()> {
             let state = Arc::clone(&state);
             move |job_id, _scheduler| {
                 let state = Arc::clone(&state);
-                Box::pin(async move { try_update(job_id, &state).await })
+                Box::pin(async move { try_update(job_id, state).await })
             }
         })?)
         .await?;
@@ -89,15 +92,16 @@ pub async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn try_update(job_id: JobId, state: &AppState) {
+async fn try_update(job_id: JobId, state: Arc<Mutex<AppState>>) {
+    let mut state = state.lock().await;
     log::info!("Start executing job {job_id}");
 
-    if let Err(e) = do_update(&job_id, state).await {
+    if let Err(e) = do_update(&job_id, &mut state).await {
         log::error!("Error while running update: {e:#}");
     }
 }
 
-async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
+async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> {
     let mut db = state.db.get()?;
     let channel = UpdateChannel::default();
 
@@ -108,8 +112,7 @@ async fn do_update(_job_id: &JobId, state: &AppState) -> anyhow::Result<()> {
     let java_version = db::upsert_java_version(&mut db, &java_meta.version)?;
 
     let account_meta = arcanite::get_account_meta(
-        &state.client,
-        &state.auth,
+        &mut state.arcanite,
         &launcher_meta,
         TargetOs::Windows,
         TargetArchitecture::Amd64,

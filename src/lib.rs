@@ -1,3 +1,4 @@
+use crate::arcanite::ArcaniteClient;
 use crate::auth::AuthInfo;
 use anyhow::anyhow;
 use diesel::SqliteConnection;
@@ -6,6 +7,9 @@ use r2d2::Pool;
 use reqwest::Client;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 use reqwest::redirect::Policy;
+use std::path::PathBuf;
+use std::str::FromStr;
+use tokio::fs;
 
 pub mod arcanite;
 pub mod auth;
@@ -47,8 +51,17 @@ pub fn auth_client() -> anyhow::Result<Client> {
 }
 
 pub struct AppState {
-    pub auth: AuthInfo,
     pub db: Pool<ConnectionManager<SqliteConnection>>,
     pub client: Client,
+    pub arcanite: ArcaniteClient,
     pub discord_webhook_url: Option<String>,
+}
+
+pub async fn save_auth_info(auth_info: &AuthInfo) -> anyhow::Result<()> {
+    let out_path = PathBuf::from_str(AUTH_FILE_PATH)?;
+
+    fs::create_dir_all(out_path.parent().expect("Parent must exist")).await?;
+    fs::write(&out_path, serde_json::to_string(&auth_info)?).await?;
+
+    Ok(())
 }

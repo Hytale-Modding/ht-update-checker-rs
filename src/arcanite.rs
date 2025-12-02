@@ -1,9 +1,17 @@
-use crate::auth::AuthInfo;
+use crate::auth::{AccessTokenInfo, AuthInfo};
 use crate::util::BetterJsonError;
-use anyhow::bail;
-use chrono::{DateTime, Utc};
+use anyhow::{Context, bail};
+use chrono::{DateTime, Duration, Utc};
+use oauth2::basic::{
+    BasicClient, BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
+    BasicTokenResponse,
+};
+use oauth2::{
+    AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, RedirectUrl, RefreshToken,
+    StandardRevocableToken, TokenResponse, TokenUrl,
+};
 use reqwest::header::{ACCEPT_ENCODING, AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Client, IntoUrl};
+use reqwest::{Client, IntoUrl, Method, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -217,23 +225,11 @@ async fn get_update_meta(
     if let Some(extra_headers) = extra_headers {
         req = req.headers(extra_headers);
     }
-    let response = req.send().await?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let error_message = response.text().await.ok().unwrap_or_else(|| {
-            status
-                .canonical_reason()
-                .unwrap_or("UNKNOWN REASON")
-                .to_string()
-        });
-        bail!(
-            "Received HTTP Status {status_code} {error_message}",
-            status_code = status.as_str()
-        );
-    }
-
-    response.json_with_error::<UpdateMeta>().await
+    make_request(req)
+        .await?
+        .json_with_error::<UpdateMeta>()
+        .await
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -262,8 +258,7 @@ pub struct AccountProfile {
 }
 
 pub async fn get_account_meta(
-    client: &Client,
-    auth_info: &AuthInfo,
+    client: &mut ArcaniteClient,
     launcher_meta: &LauncherMeta,
     operating_system: TargetOs,
     architecture: TargetArchitecture,
@@ -273,24 +268,119 @@ pub async fn get_account_meta(
     );
     let headers = launcher_meta.as_header_map()?;
 
-    let Some(access_token_info) = auth_info.auth_token.clone() else {
-        bail!("No auth token present!");
-    };
-
-    let response = client
+    let req = client
         .get(url)
+        .await?
         .headers(headers)
-        .header(
+        .header(ACCEPT_ENCODING, HeaderValue::from_static("gzip"));
+
+    make_request(req)
+        .await?
+        .json_with_error::<AccountMetaData>()
+        .await
+}
+
+pub struct ArcaniteClient {
+    auth_info: AuthInfo,
+    http_client: Client,
+}
+
+impl ArcaniteClient {
+    pub fn new(http_client: Client, auth_info: AuthInfo) -> Self {
+        Self {
+            auth_info,
+            http_client,
+        }
+    }
+
+    pub async fn request(
+        &mut self,
+        method: Method,
+        url: impl IntoUrl,
+    ) -> anyhow::Result<RequestBuilder> {
+        let auth_token = self
+            .check_auth()
+            .await
+            .context("unable to validate auth token")?;
+
+        let builder = self.http_client.request(method, url).header(
             AUTHORIZATION,
-            format!(
+            HeaderValue::from_maybe_shared(format!(
                 "{token_type} {token}",
-                token_type = access_token_info.token_type,
-                token = access_token_info.token
-            ),
-        )
-        .header(ACCEPT_ENCODING, HeaderValue::from_static("gzip"))
-        .send()
-        .await?;
+                token_type = auth_token.token_type,
+                token = auth_token.token
+            ))?,
+        );
+
+        Ok(builder)
+    }
+
+    pub async fn get(&mut self, url: impl IntoUrl) -> anyhow::Result<RequestBuilder> {
+        self.request(Method::GET, url).await
+    }
+
+    pub async fn post(&mut self, url: impl IntoUrl) -> anyhow::Result<RequestBuilder> {
+        self.request(Method::POST, url).await
+    }
+
+    async fn check_auth(&mut self) -> anyhow::Result<AccessTokenInfo> {
+        const GRACE_TIME: i64 = 32;
+
+        if let Some(current_token) = self.auth_info.auth_token.clone()
+            && current_token.expires_at > Utc::now() + Duration::seconds(GRACE_TIME)
+        {
+            return Ok(current_token);
+        }
+
+        log::debug!("Refreshing auth...");
+        let auth_http_client = crate::auth_client()?;
+
+        let refresh_token = RefreshToken::new(self.auth_info.refresh_token.clone());
+
+        let now = Utc::now();
+        let auth_client = oauth_client();
+        let result = auth_client
+            .exchange_refresh_token(&refresh_token)
+            .request_async(&auth_http_client)
+            .await
+            .context("Unable to refresh auth token")?;
+
+        let Some(new_refresh_token) = result.refresh_token() else {
+            bail!("No refresh token provided in auth response!")
+        };
+        let expires_at = now
+            + Duration::seconds(
+                result
+                    .expires_in()
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(3600),
+            );
+
+        let auth_info = AccessTokenInfo {
+            token: result.access_token().secret().clone(),
+            token_type: result.token_type().into(),
+            expires_at,
+        };
+
+        self.auth_info = AuthInfo {
+            auth_token: Some(auth_info.clone()),
+            refresh_token: new_refresh_token.secret().clone(),
+            scopes: self.auth_info.scopes.clone(),
+        };
+        crate::save_auth_info(&self.auth_info)
+            .await
+            .context("Unable to save new authentication info")?;
+
+        log::debug!(
+            "Success! new auth token expires at: {exp}",
+            exp = auth_info.expires_at
+        );
+        Ok(auth_info)
+    }
+}
+
+async fn make_request(builder: RequestBuilder) -> anyhow::Result<Response> {
+    let response = builder.send().await?;
 
     let status = response.status();
     if !status.is_success() {
@@ -306,5 +396,40 @@ pub async fn get_account_meta(
         );
     }
 
-    response.json_with_error::<AccountMetaData>().await
+    Ok(response)
+}
+
+pub type OAuthClient = oauth2::Client<
+    BasicErrorResponse,
+    BasicTokenResponse,
+    BasicTokenIntrospectionResponse,
+    StandardRevocableToken,
+    BasicRevocationErrorResponse,
+    EndpointSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointSet,
+>;
+
+pub fn oauth_client() -> OAuthClient {
+    let auth_url = AuthUrl::new(
+        "https://oauth.accounts.arcanitegames.ca/oauth2/auth?access_type=offline".to_string(),
+    )
+    .expect("Invalid Auth URL");
+    let token_url =
+        TokenUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/token".to_string())
+            .expect("Invalid Token URL");
+    let redirect_url =
+        RedirectUrl::new("https://accounts.arcanitegames.ca/consent/client".to_string())
+            .expect("Invalid Redirect URI");
+
+    let client_id = ClientId::new("hytale-launcher".to_string());
+    let client_secret = ClientSecret::new("".to_string());
+
+    BasicClient::new(client_id)
+        .set_client_secret(client_secret)
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_redirect_uri(redirect_url)
 }

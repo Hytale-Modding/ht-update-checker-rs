@@ -3,21 +3,15 @@ use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE;
 use chrono::Utc;
 use env_logger::Env;
+use ht_update_checker::arcanite;
 use ht_update_checker::auth::{AccessTokenInfo, AuthInfo};
-use oauth2::basic::BasicClient;
 use oauth2::url::Url;
-use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, RedirectUrl,
-    Scope, TokenResponse, TokenUrl,
-};
+use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, Scope, TokenResponse};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::path::PathBuf;
-use std::str::FromStr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
@@ -47,23 +41,7 @@ async fn authenticate(client: &mut Client) -> anyhow::Result<AuthInfo> {
     let mut rng = StdRng::from_os_rng();
     let local_port = rng.random_range(30000..=60000) as u16;
 
-    let auth_url = AuthUrl::new(
-        "https://oauth.accounts.arcanitegames.ca/oauth2/auth?access_type=offline".to_string(),
-    )?;
-    let token_url =
-        TokenUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/token".to_string())?;
-    let redirect_url =
-        RedirectUrl::new("https://accounts.arcanitegames.ca/consent/client".to_string())?;
-    let client_id = ClientId::new("hytale-launcher".to_string());
-    let client_secret = ClientSecret::new("".to_string());
-
-    let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
-
-    let auth_client = BasicClient::new(client_id)
-        .set_client_secret(client_secret)
-        .set_auth_uri(auth_url)
-        .set_token_uri(token_url)
-        .set_redirect_uri(redirect_url);
+    let auth_client = arcanite::oauth_client();
 
     // pass the target port along in the CSRF token, but do remember we need to compare against
     // the unwrapped value!
@@ -73,6 +51,7 @@ async fn authenticate(client: &mut Client) -> anyhow::Result<AuthInfo> {
     };
     let state_str = BASE64_URL_SAFE.encode(serde_json::to_string(&csrf_state_payload)?);
 
+    let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
     let (authorize_url, csrf_state) = auth_client
         .authorize_url(|| CsrfToken::new(state_str))
         .set_pkce_challenge(pkce_code_challenge)
@@ -169,9 +148,9 @@ async fn authenticate(client: &mut Client) -> anyhow::Result<AuthInfo> {
         scopes,
     };
 
-    let out_path = PathBuf::from_str(ht_update_checker::AUTH_FILE_PATH)?;
-    fs::create_dir_all(out_path.parent().expect("Parent must exist"))?;
-    fs::write(&out_path, serde_json::to_string(&auth_info)?)?;
+    ht_update_checker::save_auth_info(&auth_info)
+        .await
+        .context("Unable to save new authentication info")?;
 
     log::info!("Success!");
 
