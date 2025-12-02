@@ -5,6 +5,7 @@
 file = "src/schema.rs"
 patch_file = "src/schema.patch"
 custom_type_derives = ["diesel::query_builder::QueryId", "Clone"]
+allow_tables_to_appear_in_same_query_config = "fk_related_tables"
 
 [migrations_directory]
 dir = "migrations"
