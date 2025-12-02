@@ -8,8 +8,8 @@ diesel::table! {
         scopes -> Text,
         expires_at -> Text,
         refresh_token -> Nullable<Text>,
-        created_at -> Text,
-        updated_at -> Text,
+        created_at -> TimestamptzSqlite,
+        updated_at -> TimestamptzSqlite,
     }
 }
 
@@ -17,21 +17,21 @@ diesel::table! {
     game_versions (build_number) {
         build_number -> Integer,
         version -> Text,
-        created_at -> Text,
+        created_at -> TimestamptzSqlite,
     }
 }
 
 diesel::table! {
     java_versions (version) {
         version -> Text,
-        created_at -> Text,
+        created_at -> TimestamptzSqlite,
     }
 }
 
 diesel::table! {
     launcher_versions (version) {
         version -> Text,
-        created_at -> Text,
+        created_at -> TimestamptzSqlite,
     }
 }
 
@@ -41,8 +41,8 @@ diesel::table! {
         launcher_version_id -> Text,
         java_version_id -> Text,
         game_version_id -> Integer,
-        created_at -> Text,
-        updated_at -> Text,
+        created_at -> TimestamptzSqlite,
+        updated_at -> TimestamptzSqlite,
     }
 }
 
