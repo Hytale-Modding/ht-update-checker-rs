@@ -94,7 +94,7 @@ pub async fn main() -> anyhow::Result<()> {
 
 async fn try_update(job_id: JobId, state: Arc<Mutex<AppState>>) {
     let mut state = state.lock().await;
-    log::info!("Start executing job {job_id}");
+    log::debug!("Start executing job {job_id}");
 
     if let Err(e) = do_update(&job_id, &mut state).await {
         log::error!("Error while running update: {e:#}");
