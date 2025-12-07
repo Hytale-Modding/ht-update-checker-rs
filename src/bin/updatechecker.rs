@@ -101,9 +101,10 @@ async fn try_update(job_id: JobId, state: Arc<Mutex<AppState>>) {
     }
 }
 
+// FIXME rewrite DB logic to account for different build numbers per patch line
 async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> {
     let mut db = state.db.get()?;
-    let channel = UpdateChannel::default();
+    let channel = UpdateChannel::Release;
 
     let launcher_meta = arcanite::get_launcher_meta(&state.client, &channel).await?;
     let launcher_version = db::upsert_launcher_version(&mut db, &launcher_meta.version)?;
@@ -138,7 +139,7 @@ async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> 
     };
 
     log::info!(
-        "Launcher version: {launcher_version}; Java version: {java_version}, game version: {game_version} build: {build_number}",
+        "Channel: {channel}; Launcher version: {launcher_version}; Java version: {java_version}, game version: {game_version} build: {build_number}",
         launcher_version = launcher_version.version,
         java_version = java_version.version,
         game_version = game_version.version,

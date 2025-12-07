@@ -23,6 +23,7 @@ use uuid::Uuid;
 pub enum UpdateChannel {
     #[default]
     Release,
+    PreRelease,
     #[serde(untagged)]
     Unknown(String),
 }
@@ -35,6 +36,7 @@ impl UpdateChannel {
     pub fn color(&self) -> u32 {
         match self {
             UpdateChannel::Release => 0x476ed1,
+            UpdateChannel::PreRelease => 0xb22828,
             UpdateChannel::Unknown(_) => 0xb22828,
         }
     }
@@ -47,6 +49,7 @@ impl Display for UpdateChannel {
             "{}",
             match self {
                 UpdateChannel::Release => "release",
+                UpdateChannel::PreRelease => "pre-release",
                 UpdateChannel::Unknown(value) => value,
             }
         )
