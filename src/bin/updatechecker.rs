@@ -126,7 +126,7 @@ async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> 
     let game_version =
         db::upsert_game_version(&mut db, patch_info.current_build, &patch_info.build_version)?;
 
-    let Some(update_info) = db::update_channel(
+    let Some((prev, current)) = db::update_channel(
         &mut db,
         &channel,
         &launcher_version,
@@ -137,6 +137,12 @@ async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> 
         log::debug!("Already up to date!");
         return Ok(());
     };
+
+    // TODO temp fix to only show game updates
+    if prev.is_some_and(|prev| prev.game_version_id == current.game_version_id) {
+        log::debug!("No game update detected!");
+        return Ok(());
+    }
 
     log::info!(
         "Channel: {channel}; Launcher version: {launcher_version}; Java version: {java_version}, game version: {game_version} build: {build_number}",
@@ -154,7 +160,7 @@ async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> 
             &java_version.version,
             &game_version.version,
             game_version.build_number as u64,
-            update_info.updated_at,
+            current.updated_at,
         )
         .await?;
     }

@@ -129,7 +129,7 @@ pub fn update_channel(
     current_launcher_version: &LauncherVersion,
     current_java_version: &JavaVersion,
     current_game_version: &GameVersion,
-) -> anyhow::Result<Option<UpdateChannel>> {
+) -> anyhow::Result<Option<(Option<UpdateChannel>, UpdateChannel)>> {
     use crate::schema::update_channels::dsl::*;
 
     let channel_name = ch.to_string();
@@ -140,7 +140,7 @@ pub fn update_channel(
         .optional()
         .context("update_channel::find")?;
 
-    if prev.is_some_and(|prev| {
+    if prev.as_ref().is_some_and(|prev| {
         prev.launcher_version_id == current_launcher_version.version
             && prev.java_version_id == current_java_version.version
             && prev.game_version_id == current_game_version.build_number
@@ -179,7 +179,7 @@ pub fn update_channel(
             .get_result(connection)
             .context("update_channel::update_timestamp")?;
 
-        return Ok(Some(result));
+        return Ok(Some((prev, result)));
     }
 
     Ok(None)
