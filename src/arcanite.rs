@@ -198,7 +198,10 @@ pub async fn get_launcher_meta(
     client: &Client,
     update_channel: &UpdateChannel,
 ) -> anyhow::Result<LauncherMeta> {
-    let url = format!("https://launcher.arcanitegames.ca/version/{update_channel}/launcher.json");
+    let url = format!(
+        "https://launcher.arcanitegames.ca/version/{update_channel}/launcher.json",
+        update_channel = "stage"
+    ); // FIXME temp fix
     Ok(LauncherMeta::from_update_meta(
         get_update_meta(client, &url, None).await?,
         update_channel,
