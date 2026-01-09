@@ -6,5 +6,8 @@
 *.iws
 *.ipr
 
+# Diesel
+/migrations/.diesel_lock
+
 *.env
 /data/
