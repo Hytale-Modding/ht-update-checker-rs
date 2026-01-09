@@ -24,7 +24,7 @@ pub async fn main() -> anyhow::Result<()> {
     env_logger::init_from_env(Env::default().default_filter_or("info"));
     let mut client = ht_update_checker::auth_client()?;
 
-    let arg0 = std::env::args().next();
+    let arg0 = std::env::args().nth(1);
     let auth_mode = if arg0.is_some_and(|value| value == "--device-auth") {
         AuthMode::DeviceAuth
     } else {
