@@ -2,7 +2,7 @@ use anyhow::{Context, anyhow, bail};
 use diesel::SqliteConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use env_logger::Env;
-use ht_update_checker::arcanite::{ArcaniteClient, TargetArchitecture, TargetOs, UpdateChannel};
+use ht_update_checker::arcanite::{ArcaniteClient, LauncherUpdateChannel, TargetArchitecture, TargetOs, UpdateChannel};
 use ht_update_checker::auth::AuthInfo;
 use ht_update_checker::{AppState, arcanite, client, db, discord};
 use std::env;
@@ -105,11 +105,12 @@ async fn try_update(job_id: JobId, state: Arc<Mutex<AppState>>) {
 async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> {
     let mut db = state.db.get()?;
     let channel = UpdateChannel::Release;
+    let launcher_channel = LauncherUpdateChannel::Stage;
 
-    let launcher_meta = arcanite::get_launcher_meta(&state.client, &channel).await?;
+    let launcher_meta = arcanite::get_launcher_meta(&state.client, &launcher_channel).await?;
     let launcher_version = db::upsert_launcher_version(&mut db, &launcher_meta.version)?;
 
-    let java_meta = arcanite::get_java_version_meta(&state.client, &launcher_meta).await?;
+    let java_meta = arcanite::get_java_version_meta(&state.client, &channel, &launcher_meta).await?;
     let java_version = db::upsert_java_version(&mut db, &java_meta.version)?;
 
     let account_meta = arcanite::get_account_meta(

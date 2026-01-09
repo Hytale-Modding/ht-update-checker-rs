@@ -6,14 +6,12 @@ use oauth2::basic::{
     BasicClient, BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
     BasicTokenResponse,
 };
-use oauth2::{
-    AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, RedirectUrl, RefreshToken,
-    StandardRevocableToken, TokenResponse, TokenUrl,
-};
+use oauth2::{AuthType, AuthUrl, ClientId, DeviceAuthorizationUrl, EndpointNotSet, EndpointSet, RedirectUrl, RefreshToken, StandardRevocableToken, TokenResponse, TokenUrl};
 use reqwest::header::{ACCEPT_ENCODING, AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, IntoUrl, Method, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use uuid::Uuid;
@@ -28,9 +26,19 @@ pub enum UpdateChannel {
     Unknown(String),
 }
 
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum LauncherUpdateChannel {
+    #[default]
+    Release,
+    Stage,
+    #[serde(untagged)]
+    Unknown(String),
+}
+
+
 impl UpdateChannel {
-    pub fn values() -> [Self; 1] {
-        [UpdateChannel::Release]
+    pub fn values() -> [Self; 2] {
+        [UpdateChannel::Release, UpdateChannel::PreRelease]
     }
 
     pub fn color(&self) -> u32 {
@@ -57,7 +65,7 @@ impl Display for UpdateChannel {
 }
 
 impl FromStr for UpdateChannel {
-    type Err = String;
+    type Err = Infallible;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         for ch in UpdateChannel::values() {
@@ -66,19 +74,54 @@ impl FromStr for UpdateChannel {
             }
         }
 
-        Err(format!("Unknown channel: {value}"))
+        Ok(UpdateChannel::Unknown(value.to_string()))
     }
 }
 
+impl LauncherUpdateChannel {
+    pub fn values() -> [Self; 2] {
+        [LauncherUpdateChannel::Release, LauncherUpdateChannel::Stage]
+    }
+}
+
+impl Display for LauncherUpdateChannel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LauncherUpdateChannel::Release => "release",
+                LauncherUpdateChannel::Stage => "stage",
+                LauncherUpdateChannel::Unknown(value) => value,
+            }
+        )
+    }
+}
+
+impl FromStr for LauncherUpdateChannel {
+    type Err = Infallible;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        for ch in LauncherUpdateChannel::values() {
+            if ch.to_string() == value {
+                return Ok(ch);
+            }
+        }
+
+        Ok(LauncherUpdateChannel::Unknown(value.to_string()))
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct LauncherMeta {
-    pub channel: UpdateChannel,
+    pub channel: LauncherUpdateChannel,
     pub version: String,
     pub downloads: DownloadMeta,
 }
 
 impl LauncherMeta {
-    fn from_update_meta(value: UpdateMeta, channel: &UpdateChannel) -> Self {
+    fn from_update_meta(value: UpdateMeta, channel: &LauncherUpdateChannel) -> Self {
         LauncherMeta {
             channel: channel.clone(),
             version: value.version.clone(),
@@ -108,9 +151,9 @@ pub struct JavaVersionMeta {
 }
 
 impl JavaVersionMeta {
-    fn from_update_meta(value: UpdateMeta, launcher_meta: &LauncherMeta) -> Self {
+    fn from_update_meta(value: UpdateMeta, channel: &UpdateChannel) -> Self {
         JavaVersionMeta {
-            channel: launcher_meta.channel.clone(),
+            channel: channel.clone(),
             version: value.version.clone(),
             downloads: value.get_downloads(),
         }
@@ -196,7 +239,7 @@ impl Display for TargetArchitecture {
 
 pub async fn get_launcher_meta(
     client: &Client,
-    update_channel: &UpdateChannel,
+    update_channel: &LauncherUpdateChannel,
 ) -> anyhow::Result<LauncherMeta> {
     let url = format!(
         "https://launcher.arcanitegames.ca/version/{update_channel}/launcher.json",
@@ -210,16 +253,14 @@ pub async fn get_launcher_meta(
 
 pub async fn get_java_version_meta(
     client: &Client,
+    update_channel: &UpdateChannel,
     launcher_meta: &LauncherMeta,
 ) -> anyhow::Result<JavaVersionMeta> {
-    let url = format!(
-        "https://launcher.arcanitegames.ca/version/{update_channel}/jre.json",
-        update_channel = launcher_meta.channel
-    );
+    let url = format!("https://launcher.arcanitegames.ca/version/{update_channel}/jre.json");
 
     let headers = launcher_meta.as_header_map()?;
     let meta = get_update_meta(client, &url, Some(headers)).await?;
-    Ok(JavaVersionMeta::from_update_meta(meta, launcher_meta))
+    Ok(JavaVersionMeta::from_update_meta(meta, update_channel))
 }
 
 async fn get_update_meta(
@@ -412,30 +453,31 @@ pub type OAuthClient = oauth2::Client<
     StandardRevocableToken,
     BasicRevocationErrorResponse,
     EndpointSet,
-    EndpointNotSet,
+    EndpointSet,
     EndpointNotSet,
     EndpointNotSet,
     EndpointSet,
 >;
 
 pub fn oauth_client() -> OAuthClient {
-    let auth_url = AuthUrl::new(
-        "https://oauth.accounts.arcanitegames.ca/oauth2/auth?access_type=offline".to_string(),
-    )
-    .expect("Invalid Auth URL");
+    let auth_url = AuthUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/auth".to_string())
+        .expect("Invalid Auth URL");
     let token_url =
         TokenUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/token".to_string())
             .expect("Invalid Token URL");
-    let redirect_url =
-        RedirectUrl::new("https://accounts.arcanitegames.ca/consent/client".to_string())
-            .expect("Invalid Redirect URI");
+    let redirect_uri = RedirectUrl::new("https://accounts.arcanitegames.ca/consent/client".to_string())
+        .expect("Invalid Redirect URI");
+    let device_auth_url = DeviceAuthorizationUrl::new(
+        "https://oauth.accounts.arcanitegames.ca/oauth2/device/auth".to_string(),
+    )
+    .expect("invalid Device Auth URL");
 
-    let client_id = ClientId::new("hytale-launcher".to_string());
-    let client_secret = ClientSecret::new("".to_string());
+    let client_id = ClientId::new("hytale-server".to_string());
 
     BasicClient::new(client_id)
-        .set_client_secret(client_secret)
         .set_auth_uri(auth_url)
         .set_token_uri(token_url)
-        .set_redirect_uri(redirect_url)
+        .set_redirect_uri(redirect_uri)
+        .set_device_authorization_url(device_auth_url)
+        .set_auth_type(AuthType::RequestBody)
 }
