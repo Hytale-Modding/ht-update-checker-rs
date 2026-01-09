@@ -150,8 +150,11 @@ async fn browser_auth(client: &mut Client) -> anyhow::Result<AuthInfo> {
     let (authorize_url, csrf_state) = auth_client
         .authorize_url(|| CsrfToken::new(state_str))
         .set_pkce_challenge(pkce_code_challenge)
-        .add_scope(Scope::new("openid".to_string()))
-        .add_scope(Scope::new("offline".to_string()))
+        .add_scopes(vec![
+            Scope::new("openid".to_string()),
+            Scope::new("offline".to_string()),
+            Scope::new("auth:launcher".to_string()),
+        ])
         .url();
 
     log::info!("Opening web browser...");
