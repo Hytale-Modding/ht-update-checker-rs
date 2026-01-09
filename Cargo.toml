@@ -27,3 +27,5 @@ diesel = { version = "2.3.4", features = ["sqlite", "chrono", "without-deprecate
 diesel_migrations = { version = "2.3.0", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
 r2d2 = "0.8.10"
+base64 = "0.22.1"
+webbrowser = { version = "1.0.6", features = ["hardened", "disable-wsl"] }

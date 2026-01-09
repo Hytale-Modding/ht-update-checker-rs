@@ -6,7 +6,10 @@ use oauth2::basic::{
     BasicClient, BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
     BasicTokenResponse,
 };
-use oauth2::{AuthType, AuthUrl, ClientId, DeviceAuthorizationUrl, EndpointNotSet, EndpointSet, RedirectUrl, RefreshToken, StandardRevocableToken, TokenResponse, TokenUrl};
+use oauth2::{
+    AuthType, AuthUrl, ClientId, DeviceAuthorizationUrl, EndpointNotSet, EndpointSet, RedirectUrl,
+    RefreshToken, StandardRevocableToken, TokenResponse, TokenUrl,
+};
 use reqwest::header::{ACCEPT_ENCODING, AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, IntoUrl, Method, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
@@ -34,7 +37,6 @@ pub enum LauncherUpdateChannel {
     #[serde(untagged)]
     Unknown(String),
 }
-
 
 impl UpdateChannel {
     pub fn values() -> [Self; 2] {
@@ -111,7 +113,6 @@ impl FromStr for LauncherUpdateChannel {
         Ok(LauncherUpdateChannel::Unknown(value.to_string()))
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct LauncherMeta {
@@ -431,6 +432,7 @@ async fn make_request(builder: RequestBuilder) -> anyhow::Result<Response> {
 
     let status = response.status();
     if !status.is_success() {
+        let url = response.url().clone();
         let error_message = response.text().await.ok().unwrap_or_else(|| {
             status
                 .canonical_reason()
@@ -438,7 +440,7 @@ async fn make_request(builder: RequestBuilder) -> anyhow::Result<Response> {
                 .to_string()
         });
         bail!(
-            "Received HTTP Status {status_code} {error_message}",
+            "{url} Received HTTP Status {status_code} {error_message}",
             status_code = status.as_str()
         );
     }
@@ -465,14 +467,18 @@ pub fn oauth_client() -> OAuthClient {
     let token_url =
         TokenUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/token".to_string())
             .expect("Invalid Token URL");
-    let redirect_uri = RedirectUrl::new("https://accounts.arcanitegames.ca/consent/client".to_string())
-        .expect("Invalid Redirect URI");
+    let redirect_uri =
+        RedirectUrl::new("https://accounts.arcanitegames.ca/consent/client".to_string())
+            .expect("Invalid Redirect URI");
     let device_auth_url = DeviceAuthorizationUrl::new(
         "https://oauth.accounts.arcanitegames.ca/oauth2/device/auth".to_string(),
     )
     .expect("invalid Device Auth URL");
 
-    let client_id = ClientId::new("hytale-server".to_string());
+    // sadly we cannot use 'hytale-server' with device code auth
+    // here, as that does not have access to the account info
+    // endpoint which contains game versions
+    let client_id = ClientId::new("hytale-launcher".to_string());
 
     BasicClient::new(client_id)
         .set_auth_uri(auth_url)
