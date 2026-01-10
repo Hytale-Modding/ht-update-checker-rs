@@ -328,6 +328,28 @@ pub async fn get_account_meta(
         .await
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct HytaleDownloaderMeta {
+    #[serde(rename = "latest")]
+    pub latest_version: String,
+}
+
+pub async fn get_downloader_meta(
+    client: &mut ArcaniteClient,
+) -> anyhow::Result<HytaleDownloaderMeta> {
+    const URL: &str = "https://downloader.arcanitegames.ca/version.json";
+
+    let req = client
+        .http_client
+        .get(URL)
+        .header(ACCEPT_ENCODING, HeaderValue::from_static("gzip"));
+
+    make_request(req)
+        .await?
+        .json_with_error::<HytaleDownloaderMeta>()
+        .await
+}
+
 pub struct ArcaniteClient {
     auth_info: AuthInfo,
     http_client: Client,
@@ -374,6 +396,10 @@ impl ArcaniteClient {
     async fn check_auth(&mut self) -> anyhow::Result<AccessTokenInfo> {
         const GRACE_TIME: i64 = 32;
 
+        if self.auth_info.client_id != OAUTH_CLIENT_ID {
+            bail!("Saved client ID does not match, please reauthenticate!");
+        }
+
         if let Some(current_token) = self.auth_info.auth_token.clone()
             && current_token.expires_at > Utc::now() + Duration::seconds(GRACE_TIME)
         {
@@ -414,6 +440,7 @@ impl ArcaniteClient {
             auth_token: Some(auth_info.clone()),
             refresh_token: new_refresh_token.secret().clone(),
             scopes: self.auth_info.scopes.clone(),
+            client_id: self.auth_info.client_id.clone(),
         };
         crate::save_auth_info(&self.auth_info)
             .await
@@ -461,6 +488,11 @@ pub type OAuthClient = oauth2::Client<
     EndpointSet,
 >;
 
+// hytale-server
+// hytale-launcher
+// hytale-downloader
+pub const OAUTH_CLIENT_ID: &str = "hytale-launcher";
+
 pub fn oauth_client() -> OAuthClient {
     let auth_url = AuthUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/auth".to_string())
         .expect("Invalid Auth URL");
@@ -475,10 +507,7 @@ pub fn oauth_client() -> OAuthClient {
     )
     .expect("invalid Device Auth URL");
 
-    // sadly we cannot use 'hytale-server' with device code auth
-    // here, as that does not have access to the account info
-    // endpoint which contains game versions
-    let client_id = ClientId::new("hytale-launcher".to_string());
+    let client_id = ClientId::new(OAUTH_CLIENT_ID.to_string());
 
     BasicClient::new(client_id)
         .set_auth_uri(auth_url)

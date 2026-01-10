@@ -15,6 +15,8 @@ use rand::{Rng, SeedableRng};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::str::FromStr;
+use strum::EnumString;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
@@ -25,14 +27,15 @@ pub async fn main() -> anyhow::Result<()> {
     let mut client = ht_update_checker::auth_client()?;
 
     let arg0 = std::env::args().nth(1);
-    let auth_mode = if arg0.is_some_and(|value| value == "--device-auth") {
-        AuthMode::DeviceAuth
-    } else {
-        AuthMode::default()
-    };
+    let auth_mode = arg0
+        .filter(|arg| arg.starts_with("--auth-mode="))
+        .map(|arg| arg["--auth-mode=".len()..].to_string())
+        .and_then(|arg| AuthMode::from_str(&arg).ok())
+        .unwrap_or_default();
+
     let auth_info = match auth_mode {
-        AuthMode::OAuth => browser_auth(&mut client).await?,
-        AuthMode::DeviceAuth => device_auth(&mut client).await?,
+        AuthMode::Browser => browser_auth(&mut client).await?,
+        AuthMode::Device => device_auth(&mut client).await?,
     };
 
     ht_update_checker::save_auth_info(&auth_info)
@@ -44,11 +47,12 @@ pub async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Default)]
+#[derive(Default, EnumString)]
+#[strum(serialize_all = "lowercase")]
 enum AuthMode {
+    Browser,
     #[default]
-    OAuth,
-    DeviceAuth,
+    Device,
 }
 
 async fn device_auth(client: &mut Client) -> anyhow::Result<AuthInfo> {
@@ -59,6 +63,7 @@ async fn device_auth(client: &mut Client) -> anyhow::Result<AuthInfo> {
         .add_scopes(vec![
             Scope::new("openid".to_string()),
             Scope::new("offline".to_string()),
+            Scope::new("auth:downloader".to_string()),
         ])
         .request_async(client)
         .await
@@ -115,6 +120,7 @@ async fn device_auth(client: &mut Client) -> anyhow::Result<AuthInfo> {
         }),
         refresh_token: refresh_token.secret().clone(),
         scopes,
+        client_id: auth_client.client_id().to_string(),
     };
 
     Ok(auth_info)
@@ -244,6 +250,7 @@ async fn browser_auth(client: &mut Client) -> anyhow::Result<AuthInfo> {
         }),
         refresh_token: refresh_token.secret().clone(),
         scopes,
+        client_id: auth_client.client_id().to_string(),
     };
 
     Ok(auth_info)

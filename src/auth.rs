@@ -8,6 +8,9 @@ pub struct AuthInfo {
     pub auth_token: Option<AccessTokenInfo>,
     pub refresh_token: String,
     pub scopes: Vec<String>,
+
+    #[serde(default)]
+    pub client_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

@@ -103,7 +103,7 @@ async fn try_update(job_id: JobId, state: Arc<Mutex<AppState>>) {
     }
 }
 
-// FIXME rewrite DB logic to account for different build numbers per patch line
+// FIXME rewrite DB logic
 async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> {
     let mut db = state.db.get()?;
     let channel = UpdateChannel::Release;
