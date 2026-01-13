@@ -283,7 +283,7 @@ async fn get_update_meta(
 #[derive(Deserialize, Debug, Clone)]
 pub struct AccountMetaData {
     pub owner: Uuid,
-    pub patchlines: HashMap<UpdateChannel, Patchline>,
+    pub patchlines: Option<HashMap<UpdateChannel, Patchline>>,
     pub profiles: Vec<AccountProfile>,
 }
 

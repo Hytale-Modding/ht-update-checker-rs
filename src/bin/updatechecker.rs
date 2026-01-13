@@ -124,7 +124,12 @@ async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> 
     )
     .await?;
 
-    let Some(patch_info) = account_meta.patchlines.get(&channel) else {
+    let Some(patchlines) = account_meta.patchlines else {
+        log::debug!("No patchlines found!");
+        return Ok(());
+    };
+
+    let Some(patch_info) = patchlines.get(&channel) else {
         bail!("Unable to find patchline {channel}");
     };
     let game_version =
