@@ -56,7 +56,7 @@ enum AuthMode {
 }
 
 async fn device_auth(client: &mut Client) -> anyhow::Result<AuthInfo> {
-    let auth_client = arcanite::oauth_client();
+    let auth_client = arcanite::oauth_client(arcanite::Env::default());
 
     let response: DeviceAuthorizationResponse<EmptyExtraDeviceAuthorizationFields> = auth_client
         .exchange_device_code()
@@ -142,7 +142,7 @@ async fn browser_auth(client: &mut Client) -> anyhow::Result<AuthInfo> {
     let mut rng = StdRng::from_os_rng();
     let local_port = rng.random_range(30000..=60000) as u16;
 
-    let auth_client = arcanite::oauth_client();
+    let auth_client = arcanite::oauth_client(arcanite::Env::default());
 
     // pass the target port along in the CSRF token, but do remember we need to compare against
     // the unwrapped value!

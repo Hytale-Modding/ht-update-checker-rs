@@ -106,18 +106,20 @@ async fn try_update(job_id: JobId, state: Arc<Mutex<AppState>>) {
 // FIXME rewrite DB logic
 async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> {
     let mut db = state.db.get()?;
-    let channel = UpdateChannel::Release;
-    let launcher_channel = LauncherUpdateChannel::Stage;
+    let channel = UpdateChannel::default();
+    let launcher_channel = LauncherUpdateChannel::default();
+    let env = arcanite::Env::default();
 
-    let launcher_meta = arcanite::get_launcher_meta(&state.client, &launcher_channel).await?;
+    let launcher_meta = arcanite::get_launcher_meta(&state.client, env, &launcher_channel).await?;
     let launcher_version = db::upsert_launcher_version(&mut db, &launcher_meta.version)?;
 
     let java_meta =
-        arcanite::get_java_version_meta(&state.client, &channel, &launcher_meta).await?;
+        arcanite::get_java_version_meta(&state.client, env, &channel, &launcher_meta).await?;
     let java_version = db::upsert_java_version(&mut db, &java_meta.version)?;
 
     let account_meta = arcanite::get_account_meta(
         &mut state.arcanite,
+        env,
         &launcher_meta,
         TargetOs::Windows,
         TargetArchitecture::Amd64,

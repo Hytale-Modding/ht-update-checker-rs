@@ -240,12 +240,13 @@ impl Display for TargetArchitecture {
 
 pub async fn get_launcher_meta(
     client: &Client,
+    env: Env,
     update_channel: &LauncherUpdateChannel,
 ) -> anyhow::Result<LauncherMeta> {
     let url = format!(
-        "https://launcher.arcanitegames.ca/version/{update_channel}/launcher.json",
-        update_channel = "stage"
-    ); // FIXME temp fix
+        "https://launcher.{env_url}/version/{update_channel}/launcher.json",
+        env_url = env.base_url(),
+    );
     Ok(LauncherMeta::from_update_meta(
         get_update_meta(client, &url, None).await?,
         update_channel,
@@ -254,10 +255,14 @@ pub async fn get_launcher_meta(
 
 pub async fn get_java_version_meta(
     client: &Client,
+    env: Env,
     update_channel: &UpdateChannel,
     launcher_meta: &LauncherMeta,
 ) -> anyhow::Result<JavaVersionMeta> {
-    let url = format!("https://launcher.arcanitegames.ca/version/{update_channel}/jre.json");
+    let url = format!(
+        "https://launcher.{env_url}/version/{update_channel}/jre.json",
+        env_url = env.base_url()
+    );
 
     let headers = launcher_meta.as_header_map()?;
     let meta = get_update_meta(client, &url, Some(headers)).await?;
@@ -307,12 +312,14 @@ pub struct AccountProfile {
 
 pub async fn get_account_meta(
     client: &mut ArcaniteClient,
+    env: Env,
     launcher_meta: &LauncherMeta,
     operating_system: TargetOs,
     architecture: TargetArchitecture,
 ) -> anyhow::Result<AccountMetaData> {
     let url = format!(
-        "https://account-data.arcanitegames.ca/my-account/get-launcher-data?os={operating_system}&arch={architecture}"
+        "https://account-data.{env_url}/my-account/get-launcher-data?os={operating_system}&arch={architecture}",
+        env_url = env.base_url()
     );
     let headers = launcher_meta.as_header_map()?;
 
@@ -336,12 +343,16 @@ pub struct HytaleDownloaderMeta {
 
 pub async fn get_downloader_meta(
     client: &mut ArcaniteClient,
+    env: Env,
 ) -> anyhow::Result<HytaleDownloaderMeta> {
-    const URL: &str = "https://downloader.arcanitegames.ca/version.json";
+    let url = format!(
+        "https://downloader.{env_url}/version.json",
+        env_url = env.base_url()
+    );
 
     let req = client
         .http_client
-        .get(URL)
+        .get(url)
         .header(ACCEPT_ENCODING, HeaderValue::from_static("gzip"));
 
     make_request(req)
@@ -412,7 +423,7 @@ impl ArcaniteClient {
         let refresh_token = RefreshToken::new(self.auth_info.refresh_token.clone());
 
         let now = Utc::now();
-        let auth_client = oauth_client();
+        let auth_client = oauth_client(Env::default());
         let result = auth_client
             .exchange_refresh_token(&refresh_token)
             .request_async(&auth_http_client)
@@ -493,19 +504,35 @@ pub type OAuthClient = oauth2::Client<
 // hytale-downloader
 pub const OAUTH_CLIENT_ID: &str = "hytale-launcher";
 
-pub fn oauth_client() -> OAuthClient {
-    let auth_url = AuthUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/auth".to_string())
-        .expect("Invalid Auth URL");
+#[derive(Debug, Copy, Clone, Default)]
+pub enum Env {
+    Staging,
+    #[default]
+    Production,
+}
+
+impl Env {
+    pub fn base_url(&self) -> &'static str {
+        match self {
+            Env::Staging => "arcanitegames.ca",
+            Env::Production => "hytale.com",
+        }
+    }
+}
+
+pub fn oauth_client(env: Env) -> OAuthClient {
+    let auth_base_url = format!("https://oauth.accounts.{env_url}", env_url = env.base_url());
+    let auth_url = AuthUrl::new(format!("{auth_base_url}/oauth2/auth")).expect("Invalid Auth URL");
     let token_url =
-        TokenUrl::new("https://oauth.accounts.arcanitegames.ca/oauth2/token".to_string())
-            .expect("Invalid Token URL");
-    let redirect_uri =
-        RedirectUrl::new("https://accounts.arcanitegames.ca/consent/client".to_string())
-            .expect("Invalid Redirect URI");
-    let device_auth_url = DeviceAuthorizationUrl::new(
-        "https://oauth.accounts.arcanitegames.ca/oauth2/device/auth".to_string(),
-    )
-    .expect("invalid Device Auth URL");
+        TokenUrl::new(format!("{auth_base_url}/oauth2/token")).expect("Invalid Token URL");
+    let redirect_uri = RedirectUrl::new(format!(
+        "https://accounts.{env_url}/consent/client",
+        env_url = env.base_url()
+    ))
+    .expect("Invalid Redirect URI");
+    let device_auth_url =
+        DeviceAuthorizationUrl::new(format!("{auth_base_url}/oauth2/device/auth"))
+            .expect("invalid Device Auth URL");
 
     let client_id = ClientId::new(OAUTH_CLIENT_ID.to_string());
 
