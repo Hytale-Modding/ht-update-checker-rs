@@ -30,3 +30,4 @@ r2d2 = "0.8.10"
 base64 = "0.22.1"
 webbrowser = { version = "1.0.6", features = ["hardened", "disable-wsl"] }
 strum = { version = "0.27.2", features = ["derive"] }
+serde_with = "3.24.0"
