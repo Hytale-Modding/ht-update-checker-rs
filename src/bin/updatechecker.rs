@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 use tokio_cron_scheduler::job::JobId;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
-const DEFAULT_SCHEDULE: &str = "every 30 seconds";
+const DEFAULT_SCHEDULE: &str = "every minute";
 
 #[dotenvy::load(required = false)]
 #[tokio::main]
