@@ -134,8 +134,12 @@ async fn do_update(_job_id: &JobId, state: &mut AppState) -> anyhow::Result<()> 
     let Some(patch_info) = patchlines.get(&channel) else {
         bail!("Unable to find patchline {channel}");
     };
-    let game_version =
-        db::upsert_game_version(&mut db, patch_info.current_build, &patch_info.build_version)?;
+
+    let Some(current_build) = patch_info.current_build else {
+        bail!("No game version found!");
+    };
+
+    let game_version = db::upsert_game_version(&mut db, current_build, &patch_info.build_version)?;
 
     let Some((prev, current)) = db::update_channel(
         &mut db,

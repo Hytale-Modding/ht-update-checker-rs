@@ -13,9 +13,11 @@ use oauth2::{
 use reqwest::header::{ACCEPT_ENCODING, AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, IntoUrl, Method, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
+use std::num::NonZeroU64;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -292,12 +294,14 @@ pub struct AccountMetaData {
     pub profiles: Vec<AccountProfile>,
 }
 
+#[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Patchline {
     pub build_version: String,
+    #[serde_as(deserialize_as = "serde_with::NoneAsZero")]
     #[serde(rename = "newest")]
-    pub current_build: u64,
+    pub current_build: Option<NonZeroU64>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

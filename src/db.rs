@@ -12,6 +12,7 @@ use diesel::{
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::error::Error;
+use std::num::NonZeroU64;
 
 pub fn apply_migrations(
     pool: &Pool<ConnectionManager<SqliteConnection>>,
@@ -93,13 +94,13 @@ pub fn upsert_java_version(
 
 pub fn upsert_game_version(
     connection: &mut SqliteConnection,
-    build: u64,
+    build: NonZeroU64,
     version_name: &str,
 ) -> anyhow::Result<GameVersion> {
     use crate::schema::game_versions::dsl::*;
 
     let result = NewGameVersion {
-        build_number: build as i32,
+        build_number: build.get() as i32,
         version: version_name,
     }
     .insert_into(game_versions)
@@ -113,7 +114,7 @@ pub fn upsert_game_version(
         Some(result) => Ok(result),
         None => {
             let v = game_versions
-                .find(build as i32)
+                .find(build.get() as i32)
                 .select(GameVersion::as_select())
                 .first(connection)
                 .with_context(|| format!("upsert_game_version::find @ {build}"))?;
