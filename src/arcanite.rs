@@ -475,14 +475,16 @@ async fn make_request(builder: RequestBuilder) -> anyhow::Result<Response> {
     let status = response.status();
     if !status.is_success() {
         let url = response.url().clone();
-        let error_message = response.text().await.ok().unwrap_or_else(|| {
-            status
-                .canonical_reason()
-                .unwrap_or("UNKNOWN REASON")
-                .to_string()
-        });
+
+        let error_message = if status.as_u16() != 500 {
+            response.text().await.ok().unwrap_or_else(|| {
+                format!(" {}", status.canonical_reason().unwrap_or("UNKNOWN REASON"))
+            })
+        } else {
+            String::new()
+        };
         bail!(
-            "{url} Received HTTP Status {status_code} {error_message}",
+            "{url} Received HTTP Status {status_code}{error_message}",
             status_code = status.as_str()
         );
     }
